@@ -36,7 +36,11 @@ def parse_args():
     """
     Parses command line arguments.
     """
+    # 创建实例 一个ArgumentParser实例
     parser = argparse.ArgumentParser('Reading Comprehension on BaiduRC dataset')
+
+    # 添加参数 可选参数： '-f' '--foo'形式 位置参数： 'bar'形式
+    # action 默认为store;  store_const：值存放在const中 store_true和store_false：值存为True或False append：存为列表，可以有多个参数
     parser.add_argument('--prepare', action='store_true',
                         help='create the directories, prepare the vocabulary and embeddings')
     parser.add_argument('--train', action='store_true',
@@ -48,26 +52,28 @@ def parse_args():
     parser.add_argument('--gpu', type=str, default='0',
                         help='specify gpu device')
 
+    # add_argument_group :参数分组,默认有可选参数和必选参数组。
+    # type ：参数类型，默认为str
     train_settings = parser.add_argument_group('train settings')
     train_settings.add_argument('--optim', default='adam',
                                 help='optimizer type')
     train_settings.add_argument('--learning_rate', type=float, default=0.001,
                                 help='learning rate')
     train_settings.add_argument('--weight_decay', type=float, default=0,
-                                help='weight decay')
+                                help='weight decay')      # 权值衰减 防止过拟合
     train_settings.add_argument('--dropout_keep_prob', type=float, default=1,
-                                help='dropout keep rate')
-    train_settings.add_argument('--batch_size', type=int, default=32,
+                                help='dropout keep rate') # 让一个神经元以某一固定的概率失活 防止过拟合
+    train_settings.add_argument('--batch_size', type=int, default=32, # 32
                                 help='train batch size')
-    train_settings.add_argument('--epochs', type=int, default=10,
-                                help='train epochs')
+    train_settings.add_argument('--epochs', type=int, default=1, # 10
+                                help='train epochs') # 一个epoch是指把所有训练数据完整的过一遍
 
     model_settings = parser.add_argument_group('model settings')
     model_settings.add_argument('--algo', choices=['BIDAF', 'MLSTM'], default='BIDAF',
                                 help='choose the algorithm to use')
-    model_settings.add_argument('--embed_size', type=int, default=300,
+    model_settings.add_argument('--embed_size', type=int, default=30, # 300
                                 help='size of the embeddings')
-    model_settings.add_argument('--hidden_size', type=int, default=150,
+    model_settings.add_argument('--hidden_size', type=int, default=15, # 150
                                 help='size of LSTM hidden units')
     model_settings.add_argument('--max_p_num', type=int, default=5,
                                 help='max passage num in one sample')
@@ -78,6 +84,11 @@ def parse_args():
     model_settings.add_argument('--max_a_len', type=int, default=200,
                                 help='max length of answer')
 
+    # nargs 可以配置单个参数的定义使其能够匹配所解析的命令行的多个参数
+    # N   参数的绝对个数（例如：3）
+    # ?   0或1个参数
+    # *   0或所有参数
+    # +   所有，并且至少一个参数
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--train_files', nargs='+',
                                default=['../data/demo/trainset/search.train.json'],
@@ -146,14 +157,25 @@ def train(args):
     logger = logging.getLogger("brc")
     logger.info('Load data_set and vocab...')
     with open(os.path.join(args.vocab_dir, 'vocab.data'), 'rb') as fin:
-        vocab = pickle.load(fin)
+        vocab = pickle.load(fin) # pickle python的标准模块 程序中运行的对象信息保存和读取
     brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len,
-                          args.train_files, args.dev_files)
+                          args.train_files, args.dev_files) # 最大 文章数，文章长度，问题长度，训练文件，验证文件
     logger.info('Converting text into ids...')
     brc_data.convert_to_ids(vocab)
     logger.info('Initialize the model...')
     rc_model = RCModel(vocab, args)
     logger.info('Training the model...')
+    """
+    Train the model with data
+    Args:
+        data: the BRCDataset class implemented in dataset.py
+        epochs: number of training epochs
+        batch_size:
+        save_dir: the directory to save the model
+        save_prefix: the prefix indicating the model type
+        dropout_keep_prob: float value indicating dropout keep probability
+        evaluate: whether to evaluate the model on test set after each epoch
+    """
     rc_model.train(brc_data, args.epochs, args.batch_size, save_dir=args.model_dir,
                    save_prefix=args.algo,
                    dropout_keep_prob=args.dropout_keep_prob)

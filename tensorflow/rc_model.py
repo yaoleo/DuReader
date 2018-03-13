@@ -89,7 +89,7 @@ class RCModel(object):
         self._compute_loss()
         self._create_train_op()
         self.logger.info('Time to build graph: {} s'.format(time.time() - start_t))
-        param_num = sum([np.prod(self.sess.run(tf.shape(v))) for v in self.all_params])
+        param_num = sum([np.prod(self.sess.run(tf.shape(v))) for v in self.all_params]) # np.prod 返回给定轴上的数组元素的乘积
         self.logger.info('There are {} parameters in the model'.format(param_num))
 
     def _setup_placeholders(self):
@@ -263,7 +263,7 @@ class RCModel(object):
             train_loss = self._train_epoch(train_batches, dropout_keep_prob)
             self.logger.info('Average train loss for epoch {} is {}'.format(epoch, train_loss))
 
-            if evaluate:
+            if evaluate: # whether to evaluate the model on test set after each epoch
                 self.logger.info('Evaluating the model after epoch {}'.format(epoch))
                 if data.dev_set is not None:
                     eval_batches = data.gen_mini_batches('dev', batch_size, pad_id, shuffle=False)
