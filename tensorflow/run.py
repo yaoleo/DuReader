@@ -119,30 +119,35 @@ def prepare(args):
     checks data, creates the directories, prepare the vocabulary and embeddings
     """
     logger = logging.getLogger("brc")
+    # 验证输入文件地址正确
     logger.info('Checking the data files...')
     for data_path in args.train_files + args.dev_files + args.test_files:
         assert os.path.exists(data_path), '{} file does not exist.'.format(data_path)
+    # 准备vocab,model,result,summary目录
     logger.info('Preparing the directories...')
     for dir_path in [args.vocab_dir, args.model_dir, args.result_dir, args.summary_dir]:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
-
+    # brc_data 初始化 默认（5,500,60,/data/demo下的文件)
     logger.info('Building vocabulary...')
     brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len,
                           args.train_files, args.dev_files, args.test_files)
+    # vocab 关键是有几个列表： id2token token2id 问题和文章里 所有的单词和id 对应起来 还统计了单词出现的次数token_cnt
     vocab = Vocab(lower=True)
     for word in brc_data.word_iter('train'):
         vocab.add(word)
 
-    unfiltered_vocab_size = vocab.size()
-    vocab.filter_tokens_by_cnt(min_cnt=2)
+    unfiltered_vocab_size = vocab.size() # vocab size id2token列表长度
+    vocab.filter_tokens_by_cnt(min_cnt=2)# 过滤出现次数少于2的 然后重建id2token 和 token2id
+    # demo里过滤了5225 剩下 5006
     filtered_num = unfiltered_vocab_size - vocab.size()
     logger.info('After filter {} tokens, the final vocab size is {}'.format(filtered_num,
                                                                             vocab.size()))
-
+    # 开始随机分配 embedding
     logger.info('Assigning embeddings...')
-    vocab.randomly_init_embeddings(args.embed_size)
+    vocab.randomly_init_embeddings(args.embed_size) # 参数 词嵌入向量维度 默认30 注意 <blank> and <unk> 全是0
 
+    # 保存 pickle 保存运行中对象 保存到data/vocab中
     logger.info('Saving vocab...')
     with open(os.path.join(args.vocab_dir, 'vocab.data'), 'wb') as fout:
         pickle.dump(vocab, fout)
@@ -155,13 +160,17 @@ def train(args):
     trains the reading comprehension model
     """
     logger = logging.getLogger("brc")
+    # 加载数据集 和 辞典（prepare保存的）
     logger.info('Load data_set and vocab...')
     with open(os.path.join(args.vocab_dir, 'vocab.data'), 'rb') as fin:
-        vocab = pickle.load(fin) # pickle python的标准模块 程序中运行的对象信息保存和读取
+        vocab = pickle.load(fin) # pickle python的标准模块 --prepare运行时vocab的对象信息读取
     brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len,
-                          args.train_files, args.dev_files) # 最大 文章数，文章长度，问题长度，训练文件，验证文件
+                          args.train_files, args.dev_files) # 最大 文章数，文章长度，问题长度，
+                                                            # train时候只有训练文件，验证文件
+    # 利用vocab 把brc_data 转换 成 id
     logger.info('Converting text into ids...')
-    brc_data.convert_to_ids(vocab)
+    brc_data.convert_to_ids(vocab) # 把原始数据的问题和文章的单词转换成辞典保存的id
+    # 初始化神经网络
     logger.info('Initialize the model...')
     rc_model = RCModel(vocab, args)
     logger.info('Training the model...')
@@ -234,8 +243,9 @@ def run():
     """
     Prepares and runs the whole system.
     """
+    # 参数 命令行输入的可选参数和一些默认参数
     args = parse_args()
-
+    # log设置
     logger = logging.getLogger("brc")
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -265,4 +275,11 @@ def run():
         predict(args)
 
 if __name__ == '__main__':
+    # 参数调试：pycharm->run->Editconfigurations->Script para: --train --algo BIDAF
+    # for speed 我把默认参数都调小了 原始值在注释里
+    # --prepare : check the data files, make directories and extract a vocabulary for later use.
+    # --train --algo BIDAF （后面可以加可选参数 --epoch --learnrate 等）：
+    #          The training process includes an evaluation on the dev set after each training epoch.
+    #          By default, the model with the least Bleu-4 score on the dev set will be saved.
+    # 跳到声明位置 ctrl+b 调试进入函数 f7
     run()

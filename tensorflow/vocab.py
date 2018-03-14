@@ -38,9 +38,9 @@ class Vocab(object):
         self.unk_token = '<unk>'
 
         self.initial_tokens = initial_tokens if initial_tokens is not None else []
-        self.initial_tokens.extend([self.pad_token, self.unk_token])
+        self.initial_tokens.extend([self.pad_token, self.unk_token]) # extend() 函数用于在列表末尾一次性追加另一个序列中的多个值（用新列表扩展原来的列表）
         for token in self.initial_tokens:
-            self.add(token)
+            self.add(token) # 加token cnt+1
 
         if filename is not None:
             self.load_from_file(filename)
@@ -104,7 +104,7 @@ class Vocab(object):
             idx = len(self.id2token)
             self.id2token[idx] = token
             self.token2id[token] = idx
-        if cnt > 0:
+        if cnt > 0: # cnt 统计token出现的次数
             if token in self.token_cnt:
                 self.token_cnt[token] += cnt
             else:

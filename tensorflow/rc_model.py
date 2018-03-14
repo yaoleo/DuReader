@@ -46,12 +46,12 @@ class RCModel(object):
         self.logger = logging.getLogger("brc")
 
         # basic config
-        self.algo = args.algo
+        self.algo = args.algo # 算法 -这里是bidaf
         self.hidden_size = args.hidden_size
         self.optim_type = args.optim
         self.learning_rate = args.learning_rate
         self.weight_decay = args.weight_decay
-        self.use_dropout = args.dropout_keep_prob < 1
+        self.use_dropout = args.dropout_keep_prob < 1 # < 成立赋值 True or False
 
         # length limit
         self.max_p_num = args.max_p_num
@@ -63,10 +63,11 @@ class RCModel(object):
         self.vocab = vocab
 
         # session info
-        sess_config = tf.ConfigProto()
-        sess_config.gpu_options.allow_growth = True
+        sess_config = tf.ConfigProto() # tf.ConfigProto一般用在创建session的时候。用来对session进行参数配置
+        sess_config.gpu_options.allow_growth = True # 使用allow_growth option，刚一开始分配少量的GPU容量，然后按需慢慢的增加，由于不会释放内存，所以会导致碎片
         self.sess = tf.Session(config=sess_config)
 
+        # ！建立神经网络
         self._build_graph()
 
         # save info
@@ -83,8 +84,8 @@ class RCModel(object):
         self._setup_placeholders()
         self._embed()
         self._encode()
-        self._match()
-        self._fuse()
+        self._match() # bidaf or match-lstm
+        self._fuse()  # bidaf原文的model层
         self._decode()
         self._compute_loss()
         self._create_train_op()
@@ -94,7 +95,11 @@ class RCModel(object):
 
     def _setup_placeholders(self):
         """
-        Placeholders
+        Placeholders 
+        tf.placeholder(dtype, shape=None, name=None) 规定参数类型 格式 执行时候在赋具体值
+        dtype：数据类型。常用的是tf.float32,tf.float64等数值类型
+        shape：数据形状。默认是None，就是一维值，也可以是多维，比如[2,3], [None, 3]表示列是3，行不定
+        name：名称。
         """
         self.p = tf.placeholder(tf.int32, [None, None])
         self.q = tf.placeholder(tf.int32, [None, None])
@@ -109,18 +114,34 @@ class RCModel(object):
         The embedding layer, question and passage share embeddings
         """
         with tf.device('/cpu:0'), tf.variable_scope('word_embedding'):
+            # 通过tf.variable_scope生成一个上下文管理器，上下文里变量不能重名0.0 http://blog.csdn.net/gg_18826075157/article/details/78368924
+            # 并指明需求的变量在这个上下文管理器中，就可以直接通过tf.get_variable获取已经生成的变量。
             self.word_embeddings = tf.get_variable(
-                'word_embeddings',
+                'word_embeddings',# tf.get_variable跟tf.Variable都可以用来定义图变量，但是前者的必需参数（即第一个参数）并不是图变量的初始值，而是图变量的名称。
                 shape=(self.vocab.size(), self.vocab.embed_dim),
                 initializer=tf.constant_initializer(self.vocab.embeddings),
                 trainable=True
+                # trainable  If True also add the variable to the graph collection GraphKeys.TRAINABLE_VARIABLES，
+                # 这个集合被用作这些Optimizer类使用的默认变量列表，才能对它使用Optimizer
             )
+            # tf.nn.embedding_lookup（params,ids)：在embedding列表里查ids对应的embedding
+            # 返回值和params里embedding一样的tensor
             self.p_emb = tf.nn.embedding_lookup(self.word_embeddings, self.p)
             self.q_emb = tf.nn.embedding_lookup(self.word_embeddings, self.q)
 
     def _encode(self):
         """
         Employs two Bi-LSTMs to encode passage and question separately
+        
+        basic.rnn(rnn_type, inputs, length, hidden_size, layer_num=1, dropout_keep_prob=None, concat=True)
+        rnn_type: the type of rnn
+        inputs: padded inputs into rnn
+        length: the valid length of the inputs
+        hidden_size: the size of hidden units
+        layer_num: multiple rnn layer are stacked if layer_num > 1
+        dropout_keep_prob:
+        concat: When the rnn is bidirectional, the forward outputs and backward outputs are
+                concatenated if this is True, else we add them.
         """
         with tf.variable_scope('passage_encoding'):
             self.sep_p_encodes, _ = rnn('bi-lstm', self.p_emb, self.p_length, self.hidden_size)
@@ -148,6 +169,7 @@ class RCModel(object):
     def _fuse(self):
         """
         Employs Bi-LSTM again to fuse the context information after match layer
+        原文里的model层 原文是两层0.0
         """
         with tf.variable_scope('fusion'):
             self.fuse_p_encodes, _ = rnn('bi-lstm', self.match_p_encodes, self.p_length,
@@ -161,6 +183,7 @@ class RCModel(object):
         to be the start or end of the predicted answer.
         Note that we concat the fuse_p_encodes for the passages in the same document.
         And since the encodes of queries in the same document is same, we select the first one.
+        跳过了
         """
         with tf.variable_scope('same_question_concat'):
             batch_size = tf.shape(self.start_label)[0]
